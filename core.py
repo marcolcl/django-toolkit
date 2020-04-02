@@ -1,5 +1,11 @@
+import logging
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from rest_framework.exceptions import NotFound
+from rest_framework.views import exception_handler
 from typing import List, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
@@ -50,3 +56,24 @@ def clone_instance(instance: T) -> T:
     cloned_instance.save()
     return cloned_instance
 
+
+def exception_logging_handler(exc: Exception, context: dict):
+    """
+    Intercept DRF error handler to log the error message
+
+    Update the REST_FRAMEWORK setting in settings.py to use this handler
+
+    REST_FRAMEWORK = {
+        'EXCEPTION_HANDLER': 'core.exception_logging_handler',
+    }
+    """
+    logger.warning(exc)
+
+    # translate uncaught Django ObjectDoesNotExist exception to NotFound
+    if isinstance(exc, ObjectDoesNotExist):
+        logger.error(f'uncaught ObjectDoesNotExist error: {exc} - {context}')
+        exc = NotFound(str(exc))
+
+    # follow DRF default exception handler
+    response = exception_handler(exc, context)
+    return response
