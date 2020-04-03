@@ -1,8 +1,10 @@
 import logging
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.http import HttpRequest
 from rest_framework.exceptions import NotFound
-from rest_framework.views import exception_handler
+from rest_framework.test import APIRequestFactory
+from rest_framework.views import exception_handler, APIView
 from typing import List, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -77,3 +79,33 @@ def exception_logging_handler(exc: Exception, context: dict):
     # follow DRF default exception handler
     response = exception_handler(exc, context)
     return response
+
+
+def make_drf_request(request: HttpRequest = None, headers: dict = None):
+    """
+    The request object made by APIRequestFactory is `WSGIRequest` which
+    doesn't have `.query_params` or `.data` method as recommended by DRF.
+
+    It only gets "upgraded" to DRF `Request` class after passing through
+    the `APIView`, which invokes `.initialize_request` internally.
+
+    This helper method uses a dummy API view to return a DRF `Request`
+    object for testing purpose.
+
+    Ref:
+    https://stackoverflow.com/questions/28421797/django-rest-framework-apirequestfactory-request-object-has-no-attribute-query-p
+    https://github.com/encode/django-rest-framework/issues/3608
+    """
+    class DummyView(APIView):
+        pass
+
+    if request is None:
+        # use a default request
+        request = APIRequestFactory().get('/')
+
+    drf_request = DummyView().initialize_request(request)
+
+    if headers:
+        drf_request.headers = headers
+
+    return drf_request
